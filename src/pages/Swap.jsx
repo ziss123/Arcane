@@ -75,6 +75,10 @@ export default function Swap() {
       setEstimated("0.0");
       return;
     }
+    if (!window.ethereum) {
+      setEstimated("0.0");
+      return;
+    }
     try {
       const decimalsIn = DECIMALS[fromToken.symbol];
       const decimalsOut = DECIMALS[toToken.symbol];
@@ -82,7 +86,6 @@ export default function Swap() {
       const fromAddr = TOKEN_CONTRACTS[fromToken.symbol];
       const toAddr = TOKEN_CONTRACTS[toToken.symbol];
 
-      // getAmountOut(address,address,uint256) = 0x4aa06652
       const data = "0x4aa06652"
         + fromAddr.slice(2).padStart(64, "0")
         + toAddr.slice(2).padStart(64, "0")
@@ -94,7 +97,11 @@ export default function Swap() {
       });
 
       const raw = parseInt(result, 16) / Math.pow(10, decimalsOut);
-      setEstimated(raw.toFixed(decimalsOut === 8 ? 6 : 2));
+      if (isNaN(raw)) {
+        setEstimated("0.0");
+      } else {
+        setEstimated(raw.toFixed(decimalsOut === 8 ? 6 : 2));
+      }
     } catch (err) {
       setEstimated("0.0");
     }
@@ -134,7 +141,6 @@ export default function Swap() {
       const fromAddr = TOKEN_CONTRACTS[fromToken.symbol];
       const toAddr = TOKEN_CONTRACTS[toToken.symbol];
 
-      // Step 1: Approve token ke SimpleSwap
       showToast("Step 1/2: Approving token...");
       const approveData = "0x095ea7b3"
         + SIMPLE_SWAP.slice(2).padStart(64, "0")
@@ -145,7 +151,6 @@ export default function Swap() {
         params: [{ from: address, to: fromAddr, data: approveData, gas: "0x186A0" }],
       });
 
-      // Step 2: Swap — swap(address,address,uint256) = 0xdf791e50
       showToast("Step 2/2: Swapping...");
       const swapData = "0xdf791e50"
         + fromAddr.slice(2).padStart(64, "0")
