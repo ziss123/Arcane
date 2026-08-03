@@ -28,7 +28,6 @@ export default function Shield() {
     if (!connected || !address) return;
     try {
       const tokenAddr = TOKEN_CONTRACTS[token.symbol];
-      // selector: getShieldedBalance(address,address) = 0x7c6801aa
       const data = "0x7c6801aa"
         + tokenAddr.slice(2).padStart(64, "0")
         + address.slice(2).padStart(64, "0");
@@ -60,7 +59,6 @@ export default function Shield() {
       const value = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
       const tokenContract = TOKEN_CONTRACTS[token.symbol];
 
-      // Step 1: Approve — selector approve(address,uint256) = 0x095ea7b3
       showToast("Step 1/2: Approving token...");
       const approveData = "0x095ea7b3"
         + SHIELD_POOL.slice(2).padStart(64, "0")
@@ -71,7 +69,6 @@ export default function Shield() {
         params: [{ from: address, to: tokenContract, data: approveData, gas: "0x186A0" }],
       });
 
-      // Step 2: Shield — selector shield(address,uint256) = 0x8f214a33
       showToast("Step 2/2: Shielding funds...");
       const shieldData = "0x8f214a33"
         + tokenContract.slice(2).padStart(64, "0")
@@ -107,7 +104,6 @@ export default function Shield() {
       const value = BigInt(Math.floor(parseFloat(amount) * Math.pow(10, decimals)));
       const tokenContract = TOKEN_CONTRACTS[token.symbol];
 
-      // selector: unshield(address,uint256,address) = 0x46698e0b
       const data = "0x46698e0b"
         + tokenContract.slice(2).padStart(64, "0")
         + value.toString(16).padStart(64, "0")
@@ -193,17 +189,6 @@ export default function Shield() {
           />
         </div>
       )}
-
-      <div className="bg-[#262626] rounded-md p-3 text-xs flex flex-col gap-2">
-        <div className="flex justify-between items-center">
-          <span className="text-gray-400">Anonymity set</span>
-          <span className="text-green-400 font-medium">Active pool</span>
-        </div>
-        <div className="h-1.5 bg-[#1f1f1f] rounded-full overflow-hidden">
-          <div className="h-full bg-green-500" style={{ width: "82%" }} />
-        </div>
-        <div className="text-gray-500">ShieldPool contract on Arc Testnet</div>
-      </div>
 
       {txHash && (
         <div className="bg-[#262626] rounded-md p-3 text-xs flex flex-col gap-1">

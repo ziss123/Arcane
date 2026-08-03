@@ -97,7 +97,7 @@ export default function Swap() {
       });
 
       const raw = parseInt(result, 16) / Math.pow(10, decimalsOut);
-      if (isNaN(raw)) {
+      if (isNaN(raw) || raw === 0) {
         setEstimated("0.0");
       } else {
         setEstimated(raw.toFixed(decimalsOut === 8 ? 6 : 2));
@@ -215,22 +215,9 @@ export default function Swap() {
         </div>
       </div>
 
-      <div className="bg-[#262626] rounded-xl p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400 flex items-center gap-2">
-            <i className="ti ti-users-group"></i> Anonymity set
-          </span>
-          <span className="text-green-400 font-medium">Active pool</span>
-        </div>
-        <div className="h-1.5 bg-[#1f1f1f] rounded-full overflow-hidden">
-          <div className="h-full bg-green-500" style={{ width: "82%" }} />
-        </div>
-        <div className="text-xs text-gray-500">SimpleSwap contract on Arc Testnet</div>
-      </div>
-
       <div className="flex justify-between text-sm text-gray-400">
         <span>Rate</span>
-        <span>1 {fromToken.symbol} = {estimated && amount === "1" ? estimated : "..."} {toToken.symbol}</span>
+        <span>1 {fromToken.symbol} = {amount === "1" && estimated !== "0.0" ? estimated : "..."} {toToken.symbol}</span>
       </div>
 
       {txHash && (

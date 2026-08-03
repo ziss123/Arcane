@@ -9,16 +9,14 @@ export default function Sidebar({ page, setPage }) {
     { icon: "ti-shield", label: "Shield / Unshield", key: "shield" },
     { icon: "ti-arrows-exchange", label: "Private swap", key: "swap" },
     { icon: "ti-history", label: "History", key: "history" },
-    { icon: "ti-address-book", label: "Address book", key: "addressbook" },
-    { icon: "ti-shield-check", label: "Proof verifier", key: "verify" },
-    { icon: "ti-settings", label: "Settings", key: "settings" },
+    { icon: "ti-shield-lock", label: "Auto Vault", key: "vault" },
   ];
 
   return (
     <div className="w-56 bg-[#212121] p-4 flex flex-col gap-1 min-h-screen border-r border-white/5">
       <div className="flex items-center gap-2 mb-4 px-1">
         <i className="ti ti-shield-lock text-xl text-blue-400"></i>
-        <span className="font-semibold"> Arcane  </span>
+        <span className="font-semibold">Arcane</span>
       </div>
 
       {menuItems.map((item) => (
@@ -37,14 +35,14 @@ export default function Sidebar({ page, setPage }) {
 
       <div className="mt-auto pt-4 border-t border-white/5">
         {connected ? (
-          <div className="flex items-center justify-between gap-2 text-xs text-gray-400">
+          <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-400"></div>
-              <span>{shortAddress}</span>
+              <span className="text-xs text-gray-300">{shortAddress}</span>
             </div>
             <button
               onClick={disconnect}
-              className="text-red-400 hover:text-red-300 transition"
+              className="text-xs text-red-400 hover:text-red-300 transition"
             >
               <i className="ti ti-logout"></i>
             </button>

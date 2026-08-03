@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useToast } from "../context/ToastContext";
 import { useWallet } from "../context/WalletContext";
+
 import TokenSelector, { tokens } from "../components/TokenSelector";
 
 const CONTRACTS = {
@@ -14,6 +15,7 @@ const DECIMALS = { USDC: 6, EURC: 6, cirBTC: 8 };
 export default function Send() {
   const { showToast } = useToast();
   const { connected, address, fetchAllBalances } = useWallet();
+  
   const [mode, setMode] = useState("private");
   const [token, setToken] = useState(tokens[0]);
   const [amount, setAmount] = useState("");
