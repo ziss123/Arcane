@@ -24,3 +24,6 @@ coverage/
 # Hardhat
 cache/
 artifacts/
+.vercel/
+.vercel
+.env*
