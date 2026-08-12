@@ -1,10 +1,21 @@
 import { useState } from "react";
-import { useWallet } from "../context/WalletContext";
+// HAPUS: import { useWallet } from "../context/WalletContext";
 
 export default function LockScreen() {
-  const { tryUnlock } = useWallet();
+  // GANTI: const { tryUnlock } = useWallet();
   const [pin, setPin] = useState("");
   const [error, setError] = useState(false);
+
+  // Fungsi tryUnlock didefinisikan di dalam komponen
+  const tryUnlock = (inputPin) => {
+    // PIN default: "1234" atau dari environment variable
+    const correctPin = import.meta.env.VITE_APP_PIN || "1234";
+    if (inputPin === correctPin) {
+      setError(false);
+      return true;
+    }
+    return false;
+  };
 
   const handleUnlock = () => {
     const ok = tryUnlock(pin);

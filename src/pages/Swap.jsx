@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "../context/ToastContext";
-import { useWallet } from "../context/WalletContext";
+import { useAccount } from "wagmi";
 import { tokens } from "../components/TokenSelector";
 
 const SIMPLE_SWAP = "0x60C669b57A11e41Db84b1A804621BD086262A3D8";
@@ -62,13 +62,15 @@ function TokenDropdown({ selected, onChange, exclude }) {
 
 export default function Swap() {
   const { showToast } = useToast();
-  const { connected, address, fetchAllBalances } = useWallet();
+  const { address, isConnected } = useAccount();
+  
   const [fromToken, setFromToken] = useState(tokens[0]);
   const [toToken, setToToken] = useState(tokens[1]);
   const [amount, setAmount] = useState("");
   const [estimated, setEstimated] = useState("0.0");
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
+  const [step, setStep] = useState(null); // Untuk tracking step
 
   const getAmountOut = async (amountIn) => {
     if (!amountIn || parseFloat(amountIn) <= 0) {
@@ -129,11 +131,12 @@ export default function Swap() {
   };
 
   const handleSwap = async () => {
-    if (!connected) return showToast("Connect your wallet first", "error");
+    if (!isConnected) return showToast("Connect your wallet first", "error");
     if (!amount || parseFloat(amount) <= 0) return showToast("Enter a valid amount", "error");
 
     setLoading(true);
     setTxHash(null);
+    setStep("approving");
 
     try {
       const decimalsIn = DECIMALS[fromToken.symbol];
@@ -141,7 +144,7 @@ export default function Swap() {
       const fromAddr = TOKEN_CONTRACTS[fromToken.symbol];
       const toAddr = TOKEN_CONTRACTS[toToken.symbol];
 
-      showToast("Step 1/2: Approving token...");
+      // Step 1: Approve
       const approveData = "0x095ea7b3"
         + SIMPLE_SWAP.slice(2).padStart(64, "0")
         + value.toString(16).padStart(64, "0");
@@ -151,7 +154,8 @@ export default function Swap() {
         params: [{ from: address, to: fromAddr, data: approveData, gas: "0x186A0" }],
       });
 
-      showToast("Step 2/2: Swapping...");
+      setStep("swapping");
+      // Step 2: Swap
       const swapData = "0xdf791e50"
         + fromAddr.slice(2).padStart(64, "0")
         + toAddr.slice(2).padStart(64, "0")
@@ -163,12 +167,17 @@ export default function Swap() {
       });
 
       setTxHash(hash);
-      showToast(fromToken.symbol + " swapped to " + toToken.symbol + " successfully");
+      showToast(`${fromToken.symbol} swapped to ${toToken.symbol} successfully`);
       setAmount("");
       setEstimated("0.0");
-      await fetchAllBalances(address);
+      setStep(null);
     } catch (err) {
-      showToast(err.message || "Swap failed", "error");
+      if (err.code === 4001) {
+        showToast("Transaction rejected by user", "error");
+      } else {
+        showToast(err.message || "Swap failed", "error");
+      }
+      setStep(null);
     } finally {
       setLoading(false);
     }
@@ -176,71 +185,99 @@ export default function Swap() {
 
   return (
     <div className="flex-1 p-6 flex flex-col gap-4 max-w-xl">
-      <h1 className="font-semibold text-lg">Private swap</h1>
+      <h1 className="font-semibold text-lg text-white">Private swap</h1>
 
-      {!connected && (
-        <div className="bg-[#262626] border border-yellow-500/30 rounded-md p-3 text-xs text-yellow-400">
+      {!isConnected && (
+        <div className="bg-[#1a1a1a] border border-yellow-500/30 rounded-xl p-3 text-xs text-yellow-400">
           Connect your wallet to swap tokens
         </div>
       )}
 
-      <div className="bg-[#262626] rounded-xl p-4 flex flex-col gap-3">
-        <span className="text-sm text-gray-400">You send</span>
+      {/* Card You Send */}
+      <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-400">You send</span>
+          {loading && step === "approving" && (
+            <span className="text-xs text-blue-400 animate-pulse">Approving...</span>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-3">
           <input
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             type="number"
             placeholder="0.0"
-            className="bg-transparent text-2xl font-semibold outline-none flex-1 min-w-0"
+            className="bg-transparent text-2xl font-semibold outline-none flex-1 min-w-0 text-white"
           />
           <TokenDropdown selected={fromToken} onChange={handleFromChange} exclude={toToken.symbol} />
         </div>
       </div>
 
-      <div className="flex justify-center">
+      {/* Flip Button */}
+      <div className="flex justify-center -my-2 relative z-10">
         <button
           onClick={handleFlip}
-          className="w-9 h-9 rounded-full bg-[#262626] border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2a2a2a] transition"
+          className="w-9 h-9 rounded-full bg-[#1a1a1a] border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2a2a2a] transition"
         >
           <i className="ti ti-arrows-up-down text-base"></i>
         </button>
       </div>
 
-      <div className="bg-[#262626] rounded-xl p-4 flex flex-col gap-3">
-        <span className="text-sm text-gray-400">You receive (estimated)</span>
+      {/* Card You Receive */}
+      <div className="bg-[#1a1a1a] border border-white/5 rounded-2xl p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-400">You receive (estimated)</span>
+          {loading && step === "swapping" && (
+            <span className="text-xs text-green-400 animate-pulse">Swapping...</span>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-3">
-          <span className="text-2xl font-semibold">{estimated}</span>
+          <span className="text-2xl font-semibold text-white">{estimated}</span>
           <TokenDropdown selected={toToken} onChange={handleToChange} exclude={fromToken.symbol} />
         </div>
       </div>
 
-      <div className="flex justify-between text-sm text-gray-400">
+      {/* Rate */}
+      <div className="flex justify-between text-sm text-gray-400 px-1">
         <span>Rate</span>
-        <span>1 {fromToken.symbol} = {amount === "1" && estimated !== "0.0" ? estimated : "..."} {toToken.symbol}</span>
+        <span>1 {fromToken.symbol} = {amount && estimated !== "0.0" ? estimated : "..."} {toToken.symbol}</span>
       </div>
 
+      {/* Transaction Hash */}
       {txHash && (
-        <div className="bg-[#262626] rounded-md p-3 text-xs flex flex-col gap-1">
+        <div className="bg-[#1a1a1a] border border-green-500/20 rounded-xl p-3 text-xs flex flex-col gap-1">
           <div className="text-green-400 font-medium">Swap completed</div>
           <a
-            href={"https://testnet.arcscan.app/tx/" + txHash}
+            href={`https://testnet.arcscan.app/tx/${txHash}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400 break-all"
+            className="text-blue-400 break-all hover:underline"
           >
             {txHash.slice(0, 20)}...{txHash.slice(-10)}
           </a>
         </div>
       )}
 
+      {/* Swap Button */}
       <button
         onClick={handleSwap}
-        disabled={loading || !connected}
-        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition rounded-md py-3 text-sm font-medium"
+        disabled={loading || !isConnected}
+        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition rounded-xl py-3 text-sm font-medium text-white"
       >
-        {loading ? "Swapping..." : "Swap privately"}
+        {loading ? (step === "approving" ? "Approving..." : "Swapping...") : "Swap privately"}
       </button>
+
+      {/* Status messages */}
+      {loading && step === "approving" && (
+        <div className="text-xs text-blue-400 text-center animate-pulse">
+          Step 1/2: Approving token...
+        </div>
+      )}
+      {loading && step === "swapping" && (
+        <div className="text-xs text-green-400 text-center animate-pulse">
+          Step 2/2: Swapping...
+        </div>
+      )}
     </div>
   );
 }

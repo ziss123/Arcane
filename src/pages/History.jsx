@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useWallet } from "../context/WalletContext";
+import { useAccount } from "wagmi";
 
 const EXPLORER_API = "https://testnet.arcscan.app/api";
 
@@ -23,7 +23,9 @@ function timeAgo(timestamp) {
 }
 
 export default function History() {
-  const { connected, address } = useWallet();
+  // GANTI: useWallet() → useAccount() dari wagmi
+  const { address, isConnected } = useAccount();
+  
   const [txs, setTxs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -50,8 +52,8 @@ export default function History() {
   };
 
   useEffect(() => {
-    if (connected && address) fetchHistory();
-  }, [connected, address]);
+    if (isConnected && address) fetchHistory();
+  }, [isConnected, address]);
 
   const getToken = (contractAddress) => {
     if (!contractAddress) return { symbol: "?", char: "?", color: "bg-gray-600" };
@@ -73,7 +75,7 @@ export default function History() {
     <div className="flex-1 p-6 flex flex-col gap-4 max-w-xl">
       <div className="flex items-center justify-between">
         <h1 className="font-semibold text-lg">History</h1>
-        {connected && (
+        {isConnected && (
           <button
             onClick={fetchHistory}
             className="text-gray-400 hover:text-gray-200 transition"
@@ -84,7 +86,7 @@ export default function History() {
         )}
       </div>
 
-      {!connected && (
+      {!isConnected && (
         <div className="bg-[#262626] border border-yellow-500/30 rounded-md p-3 text-xs text-yellow-400">
           Connect your wallet to see transaction history
         </div>
@@ -102,7 +104,7 @@ export default function History() {
         </div>
       )}
 
-      {!loading && connected && txs.length === 0 && !error && (
+      {!loading && isConnected && txs.length === 0 && !error && (
         <div className="text-sm text-gray-500 text-center py-6 bg-[#262626] rounded-md">
           No transactions found on Arc Testnet
         </div>

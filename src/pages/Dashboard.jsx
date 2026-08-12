@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useWallet } from "../context/WalletContext";
+import { useAccount } from "wagmi";
 import { useBalance } from "../context/BalanceContext";
+import TokenSelector, { tokens } from "../components/TokenSelector";
 
 const SHIELD_POOL = "0xF9C6B588E99254dC487D75767283F93f4a6e7Ae2";
 const SIMPLE_SWAP = "0x60C669b57A11e41Db84b1A804621BD086262A3D8";
@@ -33,8 +34,8 @@ async function ethCall(to, data) {
 }
 
 export default function Dashboard({ setPage }) {
-  const { panicked, connected, tokenBalances, fetchAllBalances, address } = useWallet();
-  const { balances, visible, setVisible } = useBalance();
+  const { address, isConnected } = useAccount();
+  const { balances, visible, setVisible, fetchBalances } = useBalance();
 
   const [poolData, setPoolData] = useState({
     USDC: { shielded: null, swapLiquidity: null },
@@ -42,6 +43,13 @@ export default function Dashboard({ setPage }) {
     cirBTC: { shielded: null, swapLiquidity: null },
   });
   const [poolLoading, setPoolLoading] = useState(false);
+
+  // Fetch saldo saat koneksi berubah
+  useEffect(() => {
+    if (isConnected && address) {
+      fetchBalances(address);
+    }
+  }, [isConnected, address]);
 
   const fetchPoolData = async () => {
     if (!window.ethereum) return;
@@ -82,23 +90,19 @@ export default function Dashboard({ setPage }) {
   };
 
   useEffect(() => {
-    fetchPoolData();
-  }, [connected]);
+    if (isConnected) fetchPoolData();
+  }, [isConnected]);
 
-  const activities = panicked ? [] : [
+  const activities = [
     { icon: "ti-eye-off", label: "Private send", time: "2 hours ago", amount: "-0.00 USDC", color: "text-red-400" },
     { icon: "ti-shield", label: "Shield funds", time: "Yesterday", amount: "+0.00 USDC", color: "text-green-400" },
     { icon: "ti-eye", label: "Public receive", time: "2 days ago", amount: "+0.20 USDC", color: "text-green-400" },
   ];
 
-  const getAmount = (symbol, bal) => {
-    if (connected && tokenBalances[symbol] !== null) return tokenBalances[symbol];
-    return bal.amount;
-  };
-
-  const totalUSDC = Object.entries(balances).reduce((sum, [symbol, bal]) => {
-    return sum + (parseFloat(getAmount(symbol, bal)) || 0);
-  }, 0);
+  const totalUSDC = Object.values(balances).reduce(
+    (sum, b) => sum + parseFloat(b.amount || 0),
+    0
+  );
 
   const actions = [
     { icon: "ti-send", label: "Send", page: "send", color: "bg-blue-600 hover:bg-blue-500" },
@@ -108,7 +112,6 @@ export default function Dashboard({ setPage }) {
 
   return (
     <div className="flex flex-col gap-6">
-
       {/* Row 1 — Net Worth + Quick Actions */}
       <div className="grid grid-cols-3 gap-4">
         {/* Net Worth */}
@@ -116,12 +119,18 @@ export default function Dashboard({ setPage }) {
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-gray-400">Net worth</span>
             <div className="flex items-center gap-2">
-              {connected && (
-                <button onClick={() => fetchAllBalances(address)} className="text-gray-500 hover:text-gray-300 transition">
+              {isConnected && (
+                <button
+                  onClick={() => fetchBalances(address)}
+                  className="text-gray-500 hover:text-gray-300 transition"
+                >
                   <i className="ti ti-refresh text-sm"></i>
                 </button>
               )}
-              <button onClick={() => setVisible(!visible)} className="text-gray-500 hover:text-gray-300 transition">
+              <button
+                onClick={() => setVisible(!visible)}
+                className="text-gray-500 hover:text-gray-300 transition"
+              >
                 <i className={`ti ${visible ? "ti-eye" : "ti-eye-off"} text-sm`}></i>
               </button>
             </div>
@@ -130,7 +139,7 @@ export default function Dashboard({ setPage }) {
             {visible ? totalUSDC.toFixed(2) : "••••"}
           </div>
           <div className="text-sm text-gray-500 mb-4">USDC equivalent</div>
-          {connected ? (
+          {isConnected ? (
             <div className="flex items-center gap-1.5 text-xs text-green-400">
               <div className="w-1.5 h-1.5 rounded-full bg-green-400"></div>
               Arc Testnet
@@ -166,13 +175,13 @@ export default function Dashboard({ setPage }) {
         {/* Your Assets */}
         <div className="col-span-2 bg-[#1a1a1a] border border-white/5 rounded-2xl p-5">
           <div className="text-sm text-gray-400 mb-4">Your assets</div>
-          {!connected && (
+          {!isConnected && (
             <div className="text-xs text-gray-500 bg-white/5 rounded-lg p-3 mb-4 text-center">
               Connect wallet to see real balances from Arc Testnet
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <div className="grid grid-cols-4 px-3 py-2 text-xs text-gray-500">
+            <div className="grid grid-cols-4 px-3 py-2 text-xs text-gray-500 border-b border-white/5">
               <span>Asset</span>
               <span className="text-right">Balance</span>
               <span className="text-right">Shielded</span>
@@ -181,8 +190,8 @@ export default function Dashboard({ setPage }) {
             {Object.entries(balances).map(([symbol, bal]) => (
               <div
                 key={symbol}
-                onClick={() => setPage("shield")}
                 className="grid grid-cols-4 items-center bg-[#262626] hover:bg-[#2a2a2a] transition rounded-xl px-3 py-3 cursor-pointer"
+                onClick={() => setPage("shield")}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full ${tokenIcons[symbol].color} flex items-center justify-center text-xs text-white font-bold`}>
@@ -191,7 +200,7 @@ export default function Dashboard({ setPage }) {
                   <span className="text-sm font-medium text-white">{symbol}</span>
                 </div>
                 <div className="text-right text-sm text-white">
-                  {visible ? getAmount(symbol, bal) : "••••"}
+                  {visible ? bal.amount : "••••"}
                 </div>
                 <div className="text-right text-sm text-gray-400">
                   {visible ? bal.shielded : "••••"}
@@ -210,18 +219,19 @@ export default function Dashboard({ setPage }) {
         <div className="col-span-1 bg-[#1a1a1a] border border-white/5 rounded-2xl p-5">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm text-gray-400">Recent activity</span>
-            <button onClick={() => setPage("history")} className="text-xs text-blue-400 hover:text-blue-300 transition">
+            <button
+              onClick={() => setPage("history")}
+              className="text-xs text-blue-400 hover:text-blue-300 transition"
+            >
               View all
             </button>
           </div>
           <div className="flex flex-col gap-2">
-            {activities.length === 0 ? (
-              <div className="text-sm text-gray-500 text-center py-8">No activity yet.</div>
-            ) : activities.map((a) => (
+            {activities.map((a, idx) => (
               <div
-                key={a.label + a.time}
-                onClick={() => setPage("history")}
+                key={idx}
                 className="flex items-center justify-between bg-[#262626] hover:bg-[#2a2a2a] transition rounded-xl px-3 py-3 cursor-pointer"
+                onClick={() => setPage("history")}
               >
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center">
@@ -257,7 +267,7 @@ export default function Dashboard({ setPage }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-3 px-2 py-1 text-xs text-gray-500">
+            <div className="grid grid-cols-3 px-2 py-1 text-xs text-gray-500 border-b border-white/5">
               <span>Token</span>
               <span className="text-right">Total Shielded</span>
               <span className="text-right">Status</span>
@@ -265,8 +275,8 @@ export default function Dashboard({ setPage }) {
             {Object.keys(TOKEN_CONTRACTS).map((symbol) => (
               <div
                 key={symbol}
-                onClick={() => setPage("shield")}
                 className="grid grid-cols-3 items-center bg-[#262626] hover:bg-[#2a2a2a] transition rounded-xl px-3 py-2.5 cursor-pointer"
+                onClick={() => setPage("shield")}
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-6 h-6 rounded-full ${tokenIcons[symbol].color} flex items-center justify-center text-xs text-white font-bold`}>
@@ -310,7 +320,7 @@ export default function Dashboard({ setPage }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <div className="grid grid-cols-3 px-2 py-1 text-xs text-gray-500">
+            <div className="grid grid-cols-3 px-2 py-1 text-xs text-gray-500 border-b border-white/5">
               <span>Pair</span>
               <span className="text-right">Rate</span>
               <span className="text-right">Liquidity</span>
@@ -322,8 +332,8 @@ export default function Dashboard({ setPage }) {
             ].map((pair) => (
               <div
                 key={pair.from + pair.to}
-                onClick={() => setPage("swap")}
                 className="grid grid-cols-3 items-center bg-[#262626] hover:bg-[#2a2a2a] transition rounded-xl px-3 py-2.5 cursor-pointer"
+                onClick={() => setPage("swap")}
               >
                 <div className="flex items-center gap-1">
                   <div className={`w-5 h-5 rounded-full ${tokenIcons[pair.from].color} flex items-center justify-center text-xs text-white font-bold`}>
@@ -359,7 +369,6 @@ export default function Dashboard({ setPage }) {
           </button>
         </div>
       </div>
-
     </div>
   );
 }

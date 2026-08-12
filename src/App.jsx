@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { ToastProvider } from "./context/ToastContext";
-import { WalletProvider, useWallet } from "./context/WalletContext";
 import { BalanceProvider } from "./context/BalanceContext";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import LockScreen from "./components/LockScreen";
 import Dashboard from "./pages/Dashboard";
 import Send from "./pages/Send";
@@ -11,7 +12,14 @@ import History from "./pages/History";
 import Agent from "./pages/Agent";
 
 function Navbar({ page, setPage }) {
-  const { connected, shortAddress, connect, disconnect } = useWallet();
+  // GANTI: useWallet() → useAccount + useConnect + useDisconnect
+  const { address, isConnected } = useAccount();
+  const { connect } = useConnect();
+  const { disconnect } = useDisconnect();
+
+  const shortAddress = address 
+    ? address.slice(0, 6) + "..." + address.slice(-4) 
+    : null;
 
   const navItems = [
     { key: "dashboard", label: "Dashboard", icon: "ti-layout-dashboard" },
@@ -49,23 +57,21 @@ function Navbar({ page, setPage }) {
       </div>
 
       <div>
-        {connected ? (
+        {isConnected ? (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
               <div className="w-2 h-2 rounded-full bg-green-400"></div>
               <span className="text-sm text-gray-300">{shortAddress}</span>
             </div>
-            <button onClick={disconnect} className="text-gray-500 hover:text-red-400 transition p-1.5">
+            <button 
+              onClick={() => disconnect()} 
+              className="text-gray-500 hover:text-red-400 transition p-1.5"
+            >
               <i className="ti ti-logout text-sm"></i>
             </button>
           </div>
         ) : (
-          <button
-            onClick={connect}
-            className="bg-blue-600 hover:bg-blue-500 transition rounded-lg px-4 py-1.5 text-sm font-medium flex items-center gap-2"
-          >
-            <i className="ti ti-plug text-sm"></i> Connect wallet
-          </button>
+          <ConnectButton />
         )}
       </div>
     </nav>
@@ -74,7 +80,8 @@ function Navbar({ page, setPage }) {
 
 function AppContent() {
   const [page, setPage] = useState("dashboard");
-  const { locked } = useWallet();
+  // State locked bisa dihapus atau disesuaikan dengan kebutuhan
+  const [locked] = useState(false);
 
   if (locked) return <LockScreen />;
 
@@ -87,7 +94,6 @@ function AppContent() {
         {page === "shield" && <Shield />}
         {page === "swap" && <Swap />}
         {page === "history" && <History />}
-        {page === "vault" && <Vault />}
         {page === "agent" && <Agent />}
       </div>
     </div>
@@ -96,13 +102,11 @@ function AppContent() {
 
 function App() {
   return (
-    <WalletProvider>
-      <BalanceProvider>
-        <ToastProvider>
-          <AppContent />
-        </ToastProvider>
-      </BalanceProvider>
-    </WalletProvider>
+    <BalanceProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
+    </BalanceProvider>
   );
 }
 

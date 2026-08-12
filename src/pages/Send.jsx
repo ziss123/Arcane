@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useToast } from "../context/ToastContext";
-import { useWallet } from "../context/WalletContext";
-
+import { useAccount } from "wagmi";
 import TokenSelector, { tokens } from "../components/TokenSelector";
 
 const CONTRACTS = {
@@ -14,7 +13,8 @@ const DECIMALS = { USDC: 6, EURC: 6, cirBTC: 8 };
 
 export default function Send() {
   const { showToast } = useToast();
-  const { connected, address, fetchAllBalances } = useWallet();
+  // GANTI: useWallet() → useAccount() dari wagmi
+  const { address, isConnected } = useAccount();
   
   const [mode, setMode] = useState("private");
   const [token, setToken] = useState(tokens[0]);
@@ -23,8 +23,39 @@ export default function Send() {
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState(null);
 
+  // Fungsi fetch balances via RPC (sama seperti di Dashboard)
+  const fetchAllBalances = async (addr) => {
+    if (!addr) return;
+    try {
+      const rpc = "https://rpc.testnet.arc.network";
+      const fetchToken = async (symbol) => {
+        const contract = CONTRACTS[symbol];
+        const decimals = DECIMALS[symbol];
+        const data = "0x70a08231" + addr.slice(2).padStart(64, "0");
+        const response = await fetch(rpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0", method: "eth_call",
+            params: [{ to: contract, data }, "latest"], id: 1,
+          }),
+        });
+        const json = await response.json();
+        const raw = parseInt(json.result, 16);
+        return (raw / Math.pow(10, decimals)).toFixed(decimals === 8 ? 6 : 2);
+      };
+      
+      const [usdc, eurc, cirbtc] = await Promise.all([
+        fetchToken("USDC"), fetchToken("EURC"), fetchToken("cirBTC")
+      ]);
+      console.log("Balances updated:", { USDC: usdc, EURC: eurc, cirBTC: cirbtc });
+    } catch (e) {
+      console.error("Failed to fetch balances:", e);
+    }
+  };
+
   const handleSend = async () => {
-    if (!connected) return showToast("Connect your wallet first", "error");
+    if (!isConnected) return showToast("Connect your wallet first", "error");
     if (!recipient.startsWith("0x")) return showToast("Invalid address", "error");
     if (!amount || parseFloat(amount) <= 0) return showToast("Enter a valid amount", "error");
 
@@ -47,7 +78,7 @@ export default function Send() {
       showToast(token.symbol + " sent successfully");
       setAmount("");
       setRecipient("");
-      await fetchAllBalances(address);
+      if (address) fetchAllBalances(address);
     } catch (err) {
       showToast(err.message || "Transaction failed", "error");
     } finally {
@@ -59,7 +90,7 @@ export default function Send() {
     <div className="flex-1 p-6 flex flex-col gap-4 max-w-md">
       <h1 className="font-semibold text-lg">Send</h1>
 
-      {!connected && (
+      {!isConnected && (
         <div className="bg-[#262626] border border-yellow-500/30 rounded-md p-3 text-xs text-yellow-400">
           Connect your wallet to send tokens
         </div>
@@ -126,7 +157,7 @@ export default function Send() {
 
       <button
         onClick={handleSend}
-        disabled={loading || !connected}
+        disabled={loading || !isConnected}
         className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 transition rounded-md py-3 text-sm font-medium"
       >
         {loading ? "Sending..." : mode === "private" ? "Send privately" : "Send"}

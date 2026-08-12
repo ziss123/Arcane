@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "../context/ToastContext";
-import { useWallet } from "../context/WalletContext";
+import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import { askGemini } from "../services/geminiAgent";
 import {
   executeSwap, executeSend, executeShield,
@@ -16,6 +16,10 @@ const QUICK_CMDS = [
   { label: "Help", icon: "ti-help", text: "What can you do?" },
 ];
 
+// ========================
+// KOMPONEN PENDUKUNG
+// ========================
+
 function Avatar({ isUser }) {
   return isUser ? null : (
     <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -28,7 +32,7 @@ function MessageBubble({ msg }) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex gap-3 ${isUser ? "justify-end" : "justify-start"} mb-4`}>
-      {!isUser && <Avatar />}
+      {!isUser && <Avatar isUser={false} />}
       <div className="flex flex-col gap-1 max-w-[75%]">
         <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isUser
@@ -133,9 +137,18 @@ function ConfirmCard({ confirming, onConfirm }) {
   );
 }
 
+// ========================
+// KOMPONEN UTAMA AGENT
+// ========================
+
 export default function Agent() {
   const { showToast } = useToast();
-  const { connected, address, sendTransaction, tokenBalances, fetchAllBalances, currentChain, switchChain } = useWallet();
+  const { address, isConnected } = useAccount();
+  const { sendTransaction } = useSendTransaction();
+  const { switchChain } = useSwitchChain();
+  
+  const [currentChain, setCurrentChain] = useState({ name: "Arc Testnet" });
+  const [tokenBalances, setTokenBalances] = useState({ USDC: null, EURC: null, cirBTC: null });
 
   const [messages, setMessages] = useState([{
     role: "agent",
@@ -147,6 +160,52 @@ export default function Agent() {
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(null);
   const bottomRef = useRef(null);
+
+  // Fungsi fetch balances via RPC
+  const fetchAllBalances = async (addr) => {
+    if (!addr) return;
+    try {
+      const rpc = "https://rpc.testnet.arc.network";
+      const TOKEN_CONTRACTS = {
+        USDC: "0x3600000000000000000000000000000000000000",
+        EURC: "0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a",
+        cirBTC: "0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF",
+      };
+      const DECIMALS = { USDC: 6, EURC: 6, cirBTC: 8 };
+      
+      const fetchToken = async (symbol) => {
+        const contract = TOKEN_CONTRACTS[symbol];
+        const decimals = DECIMALS[symbol];
+        const data = "0x70a08231" + addr.slice(2).padStart(64, "0");
+        const response = await fetch(rpc, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0", method: "eth_call",
+            params: [{ to: contract, data }, "latest"], id: 1,
+          }),
+        });
+        const json = await response.json();
+        const raw = parseInt(json.result, 16);
+        return (raw / Math.pow(10, decimals)).toFixed(decimals === 8 ? 6 : 2);
+      };
+      
+      const [usdc, eurc, cirbtc] = await Promise.all([
+        fetchToken("USDC"), fetchToken("EURC"), fetchToken("cirBTC")
+      ]);
+      setTokenBalances({ USDC: usdc, EURC: eurc, cirBTC: cirbtc });
+    } catch (e) {
+      console.error("Failed to fetch balances:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (isConnected && address) {
+      fetchAllBalances(address);
+    } else {
+      setTokenBalances({ USDC: null, EURC: null, cirBTC: null });
+    }
+  }, [isConnected, address]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -187,7 +246,7 @@ export default function Agent() {
         await executeSwitchChain({ chain: params.chain, switchChain });
         addMsg("agent", `Switched to ${params.chain}.`, { status: "success" });
       } else if (type === "balance") {
-        const lines = connected
+        const lines = isConnected
           ? Object.entries(tokenBalances).map(([s, b]) => `${s}  ${b || "0.00"}`).join("\n")
           : "Wallet not connected.";
         addMsg("agent", `Balances on ${currentChain?.name || "Arc Testnet"}:\n\n${lines}`, { status: "success" });
@@ -205,7 +264,7 @@ export default function Agent() {
     setLoading(true);
     try {
       const walletInfo = {
-        connected,
+        connected: isConnected,
         address: address || "not connected",
         chain: currentChain?.name || "Arc Testnet",
         usdc: tokenBalances?.USDC || "0",
@@ -229,16 +288,14 @@ export default function Agent() {
     const action = confirming;
     setConfirming(null);
     if (!confirmed) { addMsg("agent", "Action cancelled."); return; }
-    if (!connected) { addMsg("agent", "Please connect your wallet first.", { status: "error" }); return; }
+    if (!isConnected) { addMsg("agent", "Please connect your wallet first.", { status: "error" }); return; }
     await executeAction(action);
   };
 
   return (
     <div className="flex gap-6" style={{ height: "calc(100vh - 120px)" }}>
-
       {/* Sidebar info */}
       <div className="w-64 flex-shrink-0 flex flex-col gap-3">
-        {/* Agent info */}
         <div className="bg-[#141414] border border-white/5 rounded-2xl p-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
@@ -246,19 +303,17 @@ export default function Agent() {
             </div>
             <div>
               <div className="text-sm font-semibold text-white">Arcane Agent</div>
-              
             </div>
           </div>
           <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
-            connected ? "bg-green-500/10 text-green-400" : "bg-white/5 text-gray-500"
+            isConnected ? "bg-green-500/10 text-green-400" : "bg-white/5 text-gray-500"
           }`}>
-            <div className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-green-400 animate-pulse" : "bg-gray-600"}`}></div>
-            {connected ? currentChain?.name || "Arc Testnet" : "Wallet not connected"}
+            <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-green-400 animate-pulse" : "bg-gray-600"}`}></div>
+            {isConnected ? currentChain?.name || "Arc Testnet" : "Wallet not connected"}
           </div>
         </div>
 
-        {/* Balances */}
-        {connected && (
+        {isConnected && (
           <div className="bg-[#141414] border border-white/5 rounded-2xl p-4">
             <div className="text-xs text-gray-500 mb-3 uppercase tracking-wider">Balances</div>
             <div className="flex flex-col gap-2">
@@ -272,7 +327,6 @@ export default function Agent() {
           </div>
         )}
 
-        {/* Quick actions */}
         <div className="bg-[#141414] border border-white/5 rounded-2xl p-4">
           <div className="text-xs text-gray-500 mb-3 uppercase tracking-wider">Quick Actions</div>
           <div className="flex flex-col gap-1.5">
@@ -289,26 +343,10 @@ export default function Agent() {
             ))}
           </div>
         </div>
-
-        {/* Capabilities */}
-        <div className="bg-[#141414] border border-white/5 rounded-2xl p-4">
-          <div className="text-xs text-gray-500 mb-3 uppercase tracking-wider"></div>
-          <div className="flex flex-col gap-2">
-            {[
-              
-            ].map((item) => (
-              <div key={item.label} className="text-xs">
-                <div className="text-gray-300">{item.label}</div>
-                <div className="text-gray-600">{item.sub}</div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       {/* Chat area */}
       <div className="flex-1 flex flex-col gap-3 min-w-0">
-        {/* Chat messages */}
         <div className="flex-1 bg-[#0d0d0d] border border-white/5 rounded-2xl px-6 py-5 overflow-y-auto">
           {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
           {loading && <TypingIndicator />}
@@ -318,13 +356,12 @@ export default function Agent() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="bg-[#141414] border border-white/5 rounded-2xl px-4 py-3 flex items-center gap-3">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder={connected ? 'Message Arcane Agent...' : "Connect your wallet to start..."}
+            placeholder={isConnected ? 'Message Arcane Agent...' : "Connect your wallet to start..."}
             disabled={loading}
             className="flex-1 bg-transparent text-sm text-white outline-none placeholder-gray-600 disabled:opacity-50"
           />

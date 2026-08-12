@@ -24,51 +24,75 @@ function toHex(amount, decimals) {
     .padStart(64, "0");
 }
 
+// Helper: handle wallet errors
+function handleWalletError(err) {
+  if (err.code === 4001) {
+    throw new Error("Transaction rejected in wallet. Please approve the transaction.");
+  } else if (err.code === -32603) {
+    throw new Error("RPC error. Make sure you're on Arc Testnet and have enough USDC for gas.");
+  } else if (err.message?.includes("user rejected")) {
+    throw new Error("Transaction rejected by user.");
+  }
+  throw err;
+}
+
 // Swap tokens via SimpleSwap on Arc Testnet
 export async function executeSwap({ amount, from, to, sendTransaction, address }) {
-  const fromAddr = TOKEN_CONTRACTS[from];
-  const toAddr = TOKEN_CONTRACTS[to];
-  if (!fromAddr || !toAddr) throw new Error(`Token not supported: ${from} or ${to}`);
+  try {
+    const fromAddr = TOKEN_CONTRACTS[from];
+    const toAddr = TOKEN_CONTRACTS[to];
+    if (!fromAddr || !toAddr) throw new Error(`Token not supported: ${from} or ${to}`);
 
-  const dec = DECIMALS[from];
-  const valueHex = toHex(amount, dec);
+    const dec = DECIMALS[from];
+    const valueHex = toHex(amount, dec);
 
-  // Step 1: Approve
-  const approveData = "0x095ea7b3" + SIMPLE_SWAP.slice(2).padStart(64, "0") + valueHex;
-  await sendTransaction(fromAddr, approveData, "0x186A0");
+    // Step 1: Approve
+    const approveData = "0x095ea7b3" + SIMPLE_SWAP.slice(2).padStart(64, "0") + valueHex;
+    await sendTransaction(fromAddr, approveData, "0x186A0");
 
-  // Step 2: Swap
-  const swapData = "0xdf791e50"
-    + fromAddr.slice(2).padStart(64, "0")
-    + toAddr.slice(2).padStart(64, "0")
-    + valueHex;
-  return await sendTransaction(SIMPLE_SWAP, swapData, "0x30D40");
+    // Step 2: Swap
+    const swapData = "0xdf791e50"
+      + fromAddr.slice(2).padStart(64, "0")
+      + toAddr.slice(2).padStart(64, "0")
+      + valueHex;
+    return await sendTransaction(SIMPLE_SWAP, swapData, "0x30D40");
+  } catch (err) {
+    handleWalletError(err);
+  }
 }
 
 // Send token to address
 export async function executeSend({ amount, token, to, sendTransaction }) {
-  const contract = TOKEN_CONTRACTS[token];
-  if (!contract) throw new Error(`Token not supported: ${token}`);
-  const dec = DECIMALS[token];
-  const valueHex = toHex(amount, dec);
-  const data = "0xa9059cbb" + to.slice(2).padStart(64, "0") + valueHex;
-  return await sendTransaction(contract, data, "0x186A0");
+  try {
+    const contract = TOKEN_CONTRACTS[token];
+    if (!contract) throw new Error(`Token not supported: ${token}`);
+    const dec = DECIMALS[token];
+    const valueHex = toHex(amount, dec);
+    const data = "0xa9059cbb" + to.slice(2).padStart(64, "0") + valueHex;
+    return await sendTransaction(contract, data, "0x186A0");
+  } catch (err) {
+    handleWalletError(err);
+  }
 }
 
 // Shield tokens into ShieldPool
 export async function executeShield({ amount, token, sendTransaction }) {
-  const tokenAddr = TOKEN_CONTRACTS[token];
-  if (!tokenAddr) throw new Error(`Token not supported: ${token}`);
-  const dec = DECIMALS[token];
-  const valueHex = toHex(amount, dec);
+  try {
+    const tokenAddr = TOKEN_CONTRACTS[token];
+    if (!tokenAddr) throw new Error(`Token not supported: ${token}`);
+    const dec = DECIMALS[token];
+    const valueHex = toHex(amount, dec);
 
-  // Step 1: Approve
-  const approveData = "0x095ea7b3" + SHIELD_POOL.slice(2).padStart(64, "0") + valueHex;
-  await sendTransaction(tokenAddr, approveData, "0x186A0");
+    // Step 1: Approve
+    const approveData = "0x095ea7b3" + SHIELD_POOL.slice(2).padStart(64, "0") + valueHex;
+    await sendTransaction(tokenAddr, approveData, "0x186A0");
 
-  // Step 2: Shield
-  const shieldData = "0x8f214a33" + tokenAddr.slice(2).padStart(64, "0") + valueHex;
-  return await sendTransaction(SHIELD_POOL, shieldData, "0x30D40");
+    // Step 2: Shield
+    const shieldData = "0x8f214a33" + tokenAddr.slice(2).padStart(64, "0") + valueHex;
+    return await sendTransaction(SHIELD_POOL, shieldData, "0x30D40");
+  } catch (err) {
+    handleWalletError(err);
+  }
 }
 
 // Bridge via CCTP (simulated for testnet)
